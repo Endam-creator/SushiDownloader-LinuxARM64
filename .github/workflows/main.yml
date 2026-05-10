@@ -1,0 +1,40 @@
+name: Build SushiScan ARM64
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Permet de lancer la compilation manuellement
+
+jobs:
+  build-arm64:
+    # IMPORTANT : 'self-hosted' indique à GitHub d'utiliser ton Raspberry Pi
+    runs-on: self-hosted
+
+    steps:
+      - name: 📥 Récupération du code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configuration de l'environnement Python
+        run: |
+          # On s'assure d'utiliser le Python du système ou de l'environnement du runner
+          python3 -m pip install --upgrade pip
+          pip install pillow img2pdf selenium pyinstaller
+
+      - name: 🛠️ Compilation avec PyInstaller (ARM64)
+        run: |
+          # On nettoie les anciens dossiers de build s'ils existent
+          rm -rf build dist
+          
+          # Compilation en un seul fichier exécutable
+          pyinstaller --noconfirm --onefile --windowed \
+          --name "SushiApp_ARM64" \
+          main.py
+
+      - name: 📦 Archivage du binaire ARM64
+        uses: actions/upload-artifact@v4
+        with:
+          name: SushiApp_ARM64_Executable
+          path: dist/SushiApp_ARM64
+          if-no-files-found: error
