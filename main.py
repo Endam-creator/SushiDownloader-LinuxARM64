@@ -121,30 +121,29 @@ class SushiApp(tk.Tk):
             return False
 
     def connect_driver(self):
-        """Se connecte uniquement à une instance existante sur le port 9222"""
-        self.log("🔗 Recherche d'une session Chromium sur le port 9222...")
+        """Se connecte à la session Chromium ouverte par le launcher"""
+        self.log("🔗 Tentative de connexion au port 9222...")
+        
         options = Options()
+        # On utilise l'IP exacte que netstat a confirmée
         options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
         options.add_argument("--no-sandbox")
-
-        # --- MODIFICATION ICI ---
-        # On cherche le driver partout dans le système, 
-        # sinon on teste les deux chemins classiques (Alma et Raspberry)
-        driver_bin = shutil.which("chromedriver") or \
-                     "/usr/bin/chromedriver" or \
-                     "/usr/lib/chromium-browser/chromedriver"
+        # CRITIQUE : Autorise Selenium à discuter avec Chromium sur Linux
+        options.add_argument("--remote-allow-origins=*")
         
+        # Détection dynamique du driver sur Raspberry Pi
+        driver_bin = shutil.which("chromedriver") or "/usr/bin/chromedriver"
         service = Service(executable_path=driver_bin)
-        # -------------------------
 
         try:
             self.driver = webdriver.Chrome(service=service, options=options)
-            self.log("✅ Connexion réussie ! Vous pouvez démarrer.")
+            self.log("✅ Connexion réussie ! Pilote prêt.")
             return self.driver
-        except:
-            self.log("❌ Chromium n'est pas détecté.")
-            messagebox.showerror("Erreur", 
-                "Veuillez lancer Chromium avec votre script launcher.sh avant de cliquer sur Démarrer.")
+        except Exception as e:
+            self.log(f"❌ Erreur de connexion : {str(e)[:100]}")
+            messagebox.showerror("Erreur de liaison", 
+                "L'appli n'arrive pas à piloter la fenêtre Chromium.\n\n"
+                "Vérifiez que le launcher est bien actif.")
             return None
 
     def _ajouter_filigrane(self, original_image):
