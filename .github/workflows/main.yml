@@ -18,17 +18,15 @@ jobs:
 
       - name: 🐍 Configuration de l'environnement Python
         run: |
-          # On s'assure d'utiliser le Python du système ou de l'environnement du runner
-          python3 -m pip install --upgrade pip
-          pip install pillow img2pdf selenium pyinstaller
+          # On force l'installation car le runner est un environnement de build dédié
+          python3 -m pip install --upgrade pip --break-system-packages
+          pip install pillow img2pdf selenium pyinstaller --break-system-packages
 
       - name: 🛠️ Compilation avec PyInstaller (ARM64)
         run: |
-          # On nettoie les anciens dossiers de build s'ils existent
           rm -rf build dist
-          
-          # Compilation en un seul fichier exécutable
-          pyinstaller --noconfirm --onefile --windowed \
+          # On s'assure que pyinstaller est dans le PATH ou on l'appelle via python3 -m
+          python3 -m PyInstaller --noconfirm --onefile --windowed \
           --name "SushiApp_ARM64" \
           main.py
 
