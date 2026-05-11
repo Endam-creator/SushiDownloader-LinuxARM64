@@ -106,12 +106,10 @@ class SushiApp(tk.Tk):
 
         self.log(f"🚀 Tentative de lancement via Bash : {browser_bin}")
         
-        # On enveloppe la commande dans 'bash -c' pour garantir l'exécution du '&'
         inner_cmd = f'{browser_bin} --remote-debugging-port=9222 --user-data-dir="{self.profile_dir}" --no-sandbox --disable-dev-shm-usage --start-maximized https://sushiscan.net'
         full_cmd = f"/bin/bash -c '{inner_cmd} &' &"
         
         try:
-            # On utilise subprocess.Popen pour détacher complètement le processus du binaire Python
             subprocess.Popen(full_cmd, shell=True, preexec_fn=os.setsid)
             self.log("⏳ Attente de l'ouverture (6s)...")
             time.sleep(6)
@@ -125,14 +123,12 @@ class SushiApp(tk.Tk):
         self.log("🔗 Tentative de connexion au port 9222...")
         
         options = Options()
-        # On utilise l'IP exacte que netstat a confirmée
         options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
         options.add_argument("--no-sandbox")
-        # CRITIQUE : Autorise Selenium à discuter avec Chromium sur Linux
         options.add_argument("--remote-allow-origins=*")
         
-        # Détection dynamique du driver sur Raspberry Pi
-        driver_bin = shutil.which("chromedriver") or "/usr/bin/chromedriver"
+        # Détection dynamique du driver (Universel x64 / ARM64)
+        driver_bin = shutil.which("chromedriver") or "/usr/bin/chromedriver" or "/usr/lib/chromium-browser/chromedriver"
         service = Service(executable_path=driver_bin)
 
         try:
@@ -160,7 +156,7 @@ class SushiApp(tk.Tk):
         except: return original_image
 
     def demarrer(self):
-        """Orchestre le téléchargement et la capture précise."""
+        """Orchestre le téléchargement et la capture précise avec gestion du ratio de pixels."""
         val = self.entry_pages.get()
         if not val.isdigit():
             messagebox.showerror("Erreur", "Nombre de pages invalide")
@@ -177,7 +173,7 @@ class SushiApp(tk.Tk):
         self.driver.set_window_size(1600, 2600)
         
         os.makedirs("Downloads", exist_ok=True)
-        self.image_paths = [] # Correction point 1 : On utilise self pour la persistance
+        self.image_paths = [] 
 
         for i in range(1, max_pages + 1):
             if self._cancel_event.is_set():
@@ -191,31 +187,34 @@ class SushiApp(tk.Tk):
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div#readerarea img"))
                 )
                 
-                # Fix Lazy Load
+                # Fix Lazy Load : Scroll pour forcer l'affichage
                 self.driver.execute_script("window.scrollTo(0, 800);")
                 time.sleep(0.5)
                 self.driver.execute_script("window.scrollTo(0, 0);")
                 time.sleep(1.5)
 
-                target_img = self.driver.find_element(By.CSS_SELECTOR, "div#readerarea img")
-                
-                # Calcul précis du format pour éviter les bandes noires
-                rect = self.driver.execute_script("""
-                    var rect = arguments[0].getBoundingClientRect();
+                # --- CORRECTIF DPI / ZOOM ---
+                # On calcule les coordonnées réelles en multipliant par le devicePixelRatio
+                rect_data = self.driver.execute_script("""
+                    var rect = document.querySelector('div#readerarea img').getBoundingClientRect();
+                    var ratio = window.devicePixelRatio || 1;
                     return {
-                        left: rect.left + window.pageXOffset,
-                        top: rect.top + window.pageYOffset,
-                        width: rect.width,
-                        height: rect.height
+                        left: (rect.left + window.pageXOffset) * ratio,
+                        top: (rect.top + window.pageYOffset) * ratio,
+                        width: rect.width * ratio,
+                        height: rect.height * ratio
                     };
-                """, target_img)
+                """)
 
                 png_data = self.driver.get_screenshot_as_png()
                 full_img = Image.open(io.BytesIO(png_data)).convert("RGB")
 
-                left, top = int(rect['left']), int(rect['top'])
-                right, bottom = left + int(rect['width']), top + int(rect['height'])
+                left = int(rect_data['left'])
+                top = int(rect_data['top'])
+                right = left + int(rect_data['width'])
+                bottom = top + int(rect_data['height'])
 
+                # Découpage sécurisé (Crop)
                 final_img = full_img.crop((
                     max(0, left), 
                     max(0, top), 
@@ -224,12 +223,11 @@ class SushiApp(tk.Tk):
                 ))
 
                 final_img = self._ajouter_filigrane(final_img)
-                # Utilisation de chemins absolus pour éviter les pertes PyInstaller
                 fname = os.path.abspath(f"Downloads/page_{i:03d}.jpg")
                 final_img.save(fname, quality=95, subsampling=0)
                 
                 self.image_paths.append(fname)
-                self.log(f"✅ Page {i} capturée.")
+                self.log(f"✅ Page {i} capturée au format exact.")
 
                 if i < max_pages:
                     try:
@@ -244,7 +242,6 @@ class SushiApp(tk.Tk):
                 self.log(f"❌ Erreur page {i}: {e}")
                 break
 
-        # Correction point 1 : Appel de la création du PDF
         if self.image_paths and not self._cancel_event.is_set():
             self.log(f"📦 Création du PDF avec {len(self.image_paths)} images...")
             self._creer_pdf(self.image_paths)
@@ -260,7 +257,6 @@ class SushiApp(tk.Tk):
             with open(pdf_path, "wb") as f:
                 f.write(img2pdf.convert(image_paths))
             self.log(f"🎉 PDF créé avec succès : {pdf_path}")
-            # Nettoyage
             for p in image_paths:
                 if os.path.exists(p): os.remove(p)
         except Exception as e:
