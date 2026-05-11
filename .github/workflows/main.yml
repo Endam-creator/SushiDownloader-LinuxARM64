@@ -25,8 +25,9 @@ jobs:
       - name: 🛠️ Compilation avec PyInstaller (ARM64)
         run: |
           rm -rf build dist
-          # On s'assure que pyinstaller est dans le PATH ou on l'appelle via python3 -m
+          # On force l'inclusion des sous-modules Selenium qui causent l'erreur
           python3 -m PyInstaller --noconfirm --onefile --windowed \
+          --collect-submodules selenium \
           --name "SushiApp_ARM64" \
           main.py
 
